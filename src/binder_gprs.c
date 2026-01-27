@@ -86,17 +86,11 @@ binder_gprs_fix_registration_status(
     BinderGprs* self,
     enum ofono_netreg_status status)
 {
-    if (!binder_data_allowed(self->data)) {
-        return OFONO_NETREG_STATUS_NOT_REGISTERED;
-    } else {
-        /*
-         * TODO: need a way to make sure that SPDI information has
-         * already been read from the SIM (i.e. sim_spdi_read_cb in
-         * network.c has been called)
-         */
-        return binder_netreg_check_if_really_roaming(self->watch->netreg,
-            status);
-    }
+    /* VoLTE patch: don't gate registration status on data_allowed.
+     * IMS/VoLTE needs PS registration reported even without formal
+     * data permission from slot manager. */
+    return binder_netreg_check_if_really_roaming(self->watch->netreg,
+        status);
 }
 
 static
@@ -122,12 +116,8 @@ binder_gprs_check_data_allowed(
     BinderGprs* self)
 {
     DBG_(self, "%d %d", binder_data_allowed(self->data), self->attached);
-    if (!binder_data_allowed(self->data) && self->attached) {
-        self->attached = FALSE;
-        if (self->gprs) {
-            ofono_gprs_detached_notify(self->gprs);
-        }
-    }
+    /* VoLTE patch: don't force detach when data not formally allowed.
+     * IMS needs PS attachment regardless of data permission state. */
 
     binder_gprs_data_update_registration_state(self);
 }
@@ -159,8 +149,9 @@ binder_gprs_set_attached(
     BinderGprs* self = binder_gprs_get_data(gprs);
     struct ofono_error err;
 
-    if (binder_data_allowed(self->data) || !attached) {
-        DBG_(self, "attached: %d", attached);
+    if (binder_data_allowed(self->data) || !attached || attached) {
+        DBG_(self, "attached: %d (allowed: %d)", attached,
+            binder_data_allowed(self->data));
         if (self->set_attached_id) {
             g_source_remove(self->set_attached_id);
         }
@@ -223,8 +214,8 @@ binder_gprs_registration_status(
 {
     BinderGprs* self = binder_gprs_get_data(gprs);
     struct ofono_error err;
-    const enum ofono_netreg_status status = self->attached ?
-        self->reg_status : OFONO_NETREG_STATUS_NOT_REGISTERED;
+    /* VoLTE patch: report actual reg status regardless of attach state */
+    const enum ofono_netreg_status status = self->reg_status;
 
     DBG("%d (%s)", status, ofono_netreg_status_to_string(status));
     cb(binder_error_ok(&err), status, data);

@@ -1973,9 +1973,10 @@ binder_data_set_preferred_data_modem_submit(
 
         DBG("setPreferredDataModem(%u)", modem_id);
         gbinder_writer_append_int8(&args, modem_id);
-        radio_request_set_retry(req, BINDER_RETRY_SECS*1000, -1);
+        radio_request_set_retry(req, BINDER_RETRY_SECS*1000, 3);
         return binder_data_request_call(dr, req);
     }
+    dr->flags |= DATA_REQUEST_FLAG_SUBMISSION_FAILURE;
     return FALSE;
 }
 
